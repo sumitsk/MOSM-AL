@@ -9,12 +9,13 @@ def get_args():
 
     # gp model 
     parser.add_argument('--max_iterations', default=200, type=int, help='number of training iterations')
-    parser.add_argument('--n_components', default=4, type=int, help='number of spectral mixture components')
+    parser.add_argument('--n_components', default=10, type=int, help='number of spectral mixture components')
     
     parser.add_argument('--data_file', default=None, help='pickle file to load data from')
-    parser.add_argument('--num_samples', default=20, type=int, help='maximum number of samples')
+    parser.add_argument('--num_samples', default=40, type=int, help='maximum number of samples')
     parser.add_argument('--alpha', default=0, help='sensing cost factor')
     parser.add_argument('--beta', default=0, help='distance travelled factor')
+    parser.add_argument('--heterotopic', action='store_true', help='only one measurement allowed at a location')
     parser.add_argument('--norm_factor', default=1, type=float, help='divide all observations by this factor! (normalize observations)')
 
     parser.add_argument('--utility', default='mutual_information', help='one from {mutual_information, entropy}')

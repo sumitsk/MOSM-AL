@@ -7,8 +7,10 @@ import pickle
 from multi_spectralmixture import MultiSpectralMixture as MOSM
 from utils import zero_mean_unit_variance, normalize, entropy_from_cov, distance
 from arguments import get_args
+import pandas as pd
 import seaborn as sns
-sns.set(style="white", color_codes=True)
+from pprint import pprint
+sns.set(style="ticks", color_codes=True)
 
 
 # assuming homotopic dataset (like Jura)
@@ -51,7 +53,7 @@ def mineral_exp_dataset(train_fn, test_fn, mineral, allies):
     return x1, y1, x2, y2
 
 
-def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, utility='entropy'):
+def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, utility='entropy', heterotopic=True):
     # X - all sampling locations in the domain (n X (d + 1) )
     # 1st column of X represents the type of sample (thus compatible for heterotopic dataset)
     # sampled - boolean array representing whether sample has been collected or not (n x 1)
@@ -79,33 +81,50 @@ def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, uti
                 raise NotImplementedError
 
             # TODO: BUG (subtract cost from delta entropy not joint entropy)
-            cost = alpha * sample_cost[int(X[j, 0])] + beta * distance(pose, locs[i])
-            utilities[j] = ut - cost
-    
+            cost = alpha * sample_cost[int(X[j, 0])] + beta * distance(pose, locs[j])
+            utilities[j] = ut - cost    
             sampled[j] = False
 
         best_sample = np.argmax(utilities)
-        sampled[best_sample] = True
+        # if only one measurement is allowed at a location 
+        if heterotopic:
+            indices = (locs[:,0] == locs[best_sample,0]) * (locs[:,1] == locs[best_sample,1])
+            sampled[indices] = True
+        else:
+            sampled[best_sample] = True
+
         pose = locs[best_sample]
         new_samples.append(best_sample)
         cumm_utilies.append(utilities[best_sample])
-    render(X, locs, sampled, len(sample_cost))
+    render(X, locs, new_samples, len(sample_cost))
     ipdb.set_trace()
 
 
-def render(X, locs, sampled, num_outputs=3):
-    plt.scatter(locs[:,0], locs[:,1])
-    sampled_locs = locs[sampled]
-    # the first column is the type of sample
-    sample_type = X[sampled][:, 0]
-    for i in range(num_outputs):
-        type_i_locs = sampled_locs[sample_type == i]
-        plt.scatter(type_i_locs[:,0], type_i_locs[:,1], label='type_'+str(i))
-    plt.legend()
+def render(X, locs, samples, num_outputs=3):
+    # plt.scatter(locs[:,0], locs[:,1])
+    # sampled_locs = locs[sampled]
+    # # the first column is the type of sample
+    # sample_type = X[sampled][:, 0]
+    # for i in range(num_outputs):
+    #     type_i_locs = sampled_locs[sample_type == i]
+    #     plt.scatter(type_i_locs[:,0], type_i_locs[:,1], label='type_'+str(i))
+    # plt.legend()
+    # plt.show()
+
+    x, y = locs.T
+    sx, sy = locs[samples].T
+    idx = X[samples][:, 0].astype(int)
+    all_x = np.concatenate([x, sx])
+    all_y = np.concatenate([y, sy])
+    all_idx = np.concatenate([np.full(len(x), num_outputs), idx])
+    df = pd.DataFrame(dict(x=all_x, y=all_y, idx=all_idx))
+    num_colors = len(np.unique(idx)) + 1
+    sns.relplot(data=df, x='x', y='y', hue='idx', palette=sns.color_palette('bright', num_colors))
     plt.show()
 
 
-def get_dataset(train_fn, test_fn, features):
+def get_dataset(train_fn, test_fn, features=None):
+    features = ['Cd', 'Ni', 'Zn'] if features is None else features
     X_train, Y_train = load_data(train_fn, features=features)
     X_test, Y_test = load_data(test_fn, features=features)
     
@@ -137,10 +156,13 @@ def get_dataset(train_fn, test_fn, features):
     return all_x_train, all_y_train, all_x_test, all_y_test, all_train_locs, all_test_locs
 
 
+# OBSERVATION: heterotopic constraint often never samples one or many type of samples
+
+
 if __name__ == '__main__':
-    
     args = get_args()
-    # training dataset
+    pprint(vars(args))
+
     train_fn = 'datasets/jura_train_data.pkl'
     test_fn = 'datasets/jura_validation_data.pkl'
     
@@ -169,7 +191,7 @@ if __name__ == '__main__':
     
     # instantiate model
     model = gpflow.models.GPR(X_train, Y_train, kern)
-    # model.likelihood.variance = 0.5
+    model.likelihood.variance = 0.5
 
     gpflow.train.ScipyOptimizer().minimize(model, disp=True, maxiter=args.max_iterations)
 
@@ -183,7 +205,8 @@ if __name__ == '__main__':
            sample_cost=sample_cost, 
            alpha=args.alpha, 
            beta=args.beta, 
-           utility=args.utility)
+           utility=args.utility,
+           heterotopic=args.heterotopic)
 
     # predict at inputs given by X_pred
     # Y_pred, STD_pred = model.predict_y(X_test)  
