@@ -1,15 +1,13 @@
 import gpflow
 import numpy as np
 import matplotlib.pyplot as plt
-import ipdb
 import pickle
-
 from multi_spectralmixture import MultiSpectralMixture as MOSM
-from utils import zero_mean_unit_variance, normalize, entropy_from_cov, distance
+from utils import zero_mean_unit_variance, normalize, entropy_from_cov
 from arguments import get_args
 import pandas as pd
 import seaborn as sns
-from pprint import pprint
+import ipdb
 sns.set(style="ticks", color_codes=True)
 
 
@@ -30,7 +28,6 @@ def load_data(filename, features=None):
     # X consists of only xloc and yloc
     X = dct['data'][:, :2]
     Y = dct['data'][:, indices]
-    # TODO: incorporate landuse and rock also as one-hot variable (not sure how to do that with GPFlow package)
     return X, Y
 
 
@@ -53,11 +50,11 @@ def mineral_exp_dataset(train_fn, test_fn, mineral, allies):
     return x1, y1, x2, y2
 
 
-def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, utility='entropy', heterotopic=True):
+def greedy(X, locs, sampled, K, num_samples, utility='entropy', heterotopic=True):
     # X - all sampling locations in the domain (n X (d + 1) )
     # 1st column of X represents the type of sample (thus compatible for heterotopic dataset)
     # sampled - boolean array representing whether sample has been collected or not (n x 1)
-    n = X.shape[0]
+    n = len(X)
     new_samples = []
     cumm_utilies = []
     joint_entropy = entropy_from_cov(K)
@@ -80,12 +77,11 @@ def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, uti
             else:
                 raise NotImplementedError
 
-            # TODO: BUG (subtract cost from delta entropy not joint entropy)
-            cost = alpha * sample_cost[int(X[j, 0])] + beta * distance(pose, locs[j])
-            utilities[j] = ut - cost    
+            utilities[j] = ut
             sampled[j] = False
 
         best_sample = np.argmax(utilities)
+        print(best_sample)
         # if only one measurement is allowed at a location 
         if heterotopic:
             indices = (locs[:,0] == locs[best_sample,0]) * (locs[:,1] == locs[best_sample,1])
@@ -93,11 +89,8 @@ def greedy(X, locs, sampled, pose, K, num_samples, sample_cost, alpha, beta, uti
         else:
             sampled[best_sample] = True
 
-        pose = locs[best_sample]
         new_samples.append(best_sample)
         cumm_utilies.append(utilities[best_sample])
-    render(X, locs, new_samples, len(sample_cost))
-    ipdb.set_trace()
 
 
 def render(X, locs, samples, num_outputs=3):
@@ -156,12 +149,8 @@ def get_dataset(train_fn, test_fn, features=None):
     return all_x_train, all_y_train, all_x_test, all_y_test, all_train_locs, all_test_locs
 
 
-# OBSERVATION: heterotopic constraint often never samples one or many type of samples
-
-
 if __name__ == '__main__':
     args = get_args()
-    pprint(vars(args))
 
     train_fn = 'datasets/jura_train_data.pkl'
     test_fn = 'datasets/jura_validation_data.pkl'
@@ -172,25 +161,24 @@ if __name__ == '__main__':
 
     features = ['Cd', 'Ni', 'Zn']
     X_train, Y_train, X_test, Y_test, train_locs, test_locs = get_dataset(train_fn, test_fn, features)
-    INPUT_DIM = X_train.shape[-1] - 1
-    N_OUTPUTS = len(features)
+    input_size = X_train.shape[-1] - 1
+    num_outputs = len(features)
 
     # uncomment the following lines to set initial values for the hyperparameters (not required)
-    # weights_init = np.ones(N_OUTPUTS)
-    # means_init = 0.5 * np.ones(N_OUTPUTS)[None, :]
-    # var_init = np.ones(N_OUTPUTS)[None, :]
-    # delay_init = np.zeros(N_OUTPUTS)[None, :]
-    # phase_init = np.zeros(N_OUTPUTS)
-    # kern = MOSM(1, N_OUTPUTS, weights_init, means_init, var_init, delay_init, phase_init)
+    # weights_init = np.ones(num_outputs)
+    # means_init = 0.5 * np.ones(num_outputs)[None, :]
+    # var_init = np.ones(num_outputs)[None, :]
+    # delay_init = np.zeros(num_outputs)[None, :]
+    # phase_init = np.zeros(num_outputs)
+    # kernel = MOSM(1, num_outputs, weights_init, means_init, var_init, delay_init, phase_init)
 
     # Set the number of components
-    number_of_components = args.n_components
-    kern = MOSM(INPUT_DIM, N_OUTPUTS)
-    for i in range(number_of_components-1):
-        kern += MOSM(INPUT_DIM, N_OUTPUTS)
+    kernel = MOSM(input_size, num_outputs)
+    for _ in range(args.n_components-1):
+        kernel += MOSM(input_size, num_outputs)
     
-    # instantiate model
-    model = gpflow.models.GPR(X_train, Y_train, kern)
+    # initialize model
+    model = gpflow.models.GPR(X_train, Y_train, kernel)
     model.likelihood.variance = 0.5
 
     gpflow.train.ScipyOptimizer().minimize(model, disp=True, maxiter=args.max_iterations)
@@ -198,15 +186,7 @@ if __name__ == '__main__':
     sampled = np.full(shape=len(X_test), fill_value=False)
     y_pred, cov = model.predict_f_full_cov(X_test)
     cov = cov.squeeze()
-    pose = test_locs[0, :]
-    sample_cost = [1, .1, .1]
-    greedy(X_test, test_locs, sampled, pose, cov, 
-           num_samples=args.num_samples,
-           sample_cost=sample_cost, 
-           alpha=args.alpha, 
-           beta=args.beta, 
-           utility=args.utility,
-           heterotopic=args.heterotopic)
+    greedy(X_test, test_locs, sampled, cov, num_samples=args.num_samples, utility=args.utility, heterotopic=args.heterotopic)
 
     # predict at inputs given by X_pred
     # Y_pred, STD_pred = model.predict_y(X_test)  
@@ -215,7 +195,4 @@ if __name__ == '__main__':
     # mean and covariance matrix of latent function (f) 
     # y1, cov = model.predict_f_full_cov(X_pred)
     # y1 = Y_pred
-
-    ipdb.set_trace()
-
 
