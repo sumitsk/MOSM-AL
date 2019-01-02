@@ -1,3 +1,5 @@
+# taken from https://github.com/gparracl/MOSM
+
 import numpy as np
 import tensorflow as tf
 from tensorflow import reduce_sum as rsum

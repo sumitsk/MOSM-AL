@@ -1,3 +1,5 @@
+# taken from https://github.com/gparracl/MOSM
+
 # This is a simplification and adaptation to gpflow 1.0 of the work done by Rasmus Bonnevie on issue #328, credits to him.
 
 import numpy as np

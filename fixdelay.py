@@ -1,3 +1,5 @@
+# taken from https://github.com/gparracl/MOSM
+
 import numpy as np
 import tensorflow as tf
 import gpflow
