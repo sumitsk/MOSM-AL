@@ -14,7 +14,6 @@ def get_args():
     parser.add_argument('--data_file', default=None, help='pickle file to load data from')
     parser.add_argument('--num_samples', default=40, type=int, help='maximum number of samples')
     parser.add_argument('--heterotopic', action='store_true', help='only one measurement allowed at a location')
-    parser.add_argument('--norm_factor', default=1, type=float, help='divide all observations by this factor! (normalize observations)')
 
     parser.add_argument('--utility', default='mutual_information', help='one from {mutual_information, entropy}')
     parser.add_argument('--num_pretrain_samples', default=20, type=int, help='number of samples in pilot survey for model initialization')

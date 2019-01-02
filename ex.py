@@ -1,14 +1,13 @@
 import gpflow
 import numpy as np
-import matplotlib.pyplot as plt
 import pickle
 from multi_spectralmixture import MultiSpectralMixture as MOSM
 from utils import zero_mean_unit_variance, normalize, entropy_from_cov
 from arguments import get_args
-import pandas as pd
-import seaborn as sns
-import ipdb
-sns.set(style="ticks", color_codes=True)
+# import matplotlib.pyplot as plt
+# import pandas as pd
+# import seaborn as sns
+# sns.set(style="ticks", color_codes=True)
 
 
 # assuming homotopic dataset (like Jura)
@@ -81,7 +80,7 @@ def greedy(X, locs, sampled, K, num_samples, utility='entropy', heterotopic=True
             sampled[j] = False
 
         best_sample = np.argmax(utilities)
-        print(best_sample)
+
         # if only one measurement is allowed at a location 
         if heterotopic:
             indices = (locs[:,0] == locs[best_sample,0]) * (locs[:,1] == locs[best_sample,1])
@@ -91,29 +90,30 @@ def greedy(X, locs, sampled, K, num_samples, utility='entropy', heterotopic=True
 
         new_samples.append(best_sample)
         cumm_utilies.append(utilities[best_sample])
+    return np.array(new_samples)
 
 
-def render(X, locs, samples, num_outputs=3):
-    # plt.scatter(locs[:,0], locs[:,1])
-    # sampled_locs = locs[sampled]
-    # # the first column is the type of sample
-    # sample_type = X[sampled][:, 0]
-    # for i in range(num_outputs):
-    #     type_i_locs = sampled_locs[sample_type == i]
-    #     plt.scatter(type_i_locs[:,0], type_i_locs[:,1], label='type_'+str(i))
-    # plt.legend()
-    # plt.show()
+# def render(X, locs, samples, num_outputs=3):
+#     # plt.scatter(locs[:,0], locs[:,1])
+#     # sampled_locs = locs[sampled]
+#     # # the first column is the type of sample
+#     # sample_type = X[sampled][:, 0]
+#     # for i in range(num_outputs):
+#     #     type_i_locs = sampled_locs[sample_type == i]
+#     #     plt.scatter(type_i_locs[:,0], type_i_locs[:,1], label='type_'+str(i))
+#     # plt.legend()
+#     # plt.show()
 
-    x, y = locs.T
-    sx, sy = locs[samples].T
-    idx = X[samples][:, 0].astype(int)
-    all_x = np.concatenate([x, sx])
-    all_y = np.concatenate([y, sy])
-    all_idx = np.concatenate([np.full(len(x), num_outputs), idx])
-    df = pd.DataFrame(dict(x=all_x, y=all_y, idx=all_idx))
-    num_colors = len(np.unique(idx)) + 1
-    sns.relplot(data=df, x='x', y='y', hue='idx', palette=sns.color_palette('bright', num_colors))
-    plt.show()
+#     x, y = locs.T
+#     sx, sy = locs[samples].T
+#     idx = X[samples][:, 0].astype(int)
+#     all_x = np.concatenate([x, sx])
+#     all_y = np.concatenate([y, sy])
+#     all_idx = np.concatenate([np.full(len(x), num_outputs), idx])
+#     df = pd.DataFrame(dict(x=all_x, y=all_y, idx=all_idx))
+#     num_colors = len(np.unique(idx)) + 1
+#     sns.relplot(data=df, x='x', y='y', hue='idx', palette=sns.color_palette('bright', num_colors))
+#     plt.show()
 
 
 def get_dataset(train_fn, test_fn, features=None):
@@ -181,18 +181,26 @@ if __name__ == '__main__':
     model = gpflow.models.GPR(X_train, Y_train, kernel)
     model.likelihood.variance = 0.5
 
-    gpflow.train.ScipyOptimizer().minimize(model, disp=True, maxiter=args.max_iterations)
-
-    sampled = np.full(shape=len(X_test), fill_value=False)
+    # train model
+    print('Learning model hyperparameters ... ')
+    gpflow.train.ScipyOptimizer().minimize(model, disp=False, maxiter=args.max_iterations)
     y_pred, cov = model.predict_f_full_cov(X_test)
     cov = cov.squeeze()
-    greedy(X_test, test_locs, sampled, cov, num_samples=args.num_samples, utility=args.utility, heterotopic=args.heterotopic)
+    print('Done\n')
+
+    print('Greedy Active Learning (adaptive sampling) ... ')
+    sampled = np.full(shape=len(X_test), fill_value=False)
+    new_samples = greedy(X_test, test_locs, sampled, cov,
+                         num_samples=args.num_samples,
+                         utility=args.utility,
+                         heterotopic=args.heterotopic)
+
+    sample_type = new_samples[:, 0] 
+    sample_locs = test_locs[new_samples]
+
+    # TODO: Once determining the sampling location and type of sample,
+    # agent(s) can plan least cost path(s) to gather corresponding data 
 
     # predict at inputs given by X_pred
     # Y_pred, STD_pred = model.predict_y(X_test)  
     # rmse = np.linalg.norm(Y_pred - Y_test) / np.sqrt(len(Y_pred))
-
-    # mean and covariance matrix of latent function (f) 
-    # y1, cov = model.predict_f_full_cov(X_pred)
-    # y1 = Y_pred
-
