@@ -1,7 +1,7 @@
-# Active Learning with Multi-Output Spectral Mixture Gaussian Processes
+# Active Learning with Multi-Output Spectral Mixture Kernels Gaussian Processes
 
 ## Installation
-This project is aimed at actively learning the distribution of multiple correlated target features (e.g. concentration of minerals in a region). The distribution of target features or variables are modelled by a Multi-Output Spectral Mixture Gaussian Process proposed in https://papers.nips.cc/paper/7245-spectral-mixture-kernels-for-multi-output-gaussian-processes (https://github.com/gparracl/MOSM). After estimating the model hyperparameters by fitting the model on a training set, the agent actively determines the type and location of samples to be collected in order to minimize the uncertainty of model's prediction. The information gain criterion is entropy. 
+This project is aimed at actively learning the distribution of multiple correlated target features (e.g. concentration of minerals in a region). The distribution of target features or variables are modelled by a Multi-Output Spectral Mixture Kernels Gaussian Process proposed in https://papers.nips.cc/paper/7245-spectral-mixture-kernels-for-multi-output-gaussian-processes (https://github.com/gparracl/MOSM). After estimating the model hyperparameters by fitting the model on a training set, the agent actively determines the type and location of samples to be collected in order to minimize the uncertainty of model's prediction. The information gain criterion is entropy. 
 
 ### Requirements: 
 * [GPFlow 1.0](https://github.com/GPflow/GPflow)
